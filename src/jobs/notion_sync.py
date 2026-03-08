@@ -1,6 +1,7 @@
 from typing import Iterable, Dict, Any
 from dotenv import load_dotenv
 import os
+from psycopg.types.json import Jsonb
 
 from src.shared.logger import get_logger
 from src.shared.db import get_conn
@@ -55,7 +56,7 @@ def upsert_pages(pages: Iterable[Dict[str, Any]]) -> int:
                 
                 # Validate page ID
                 if not page_id:
-                    logger.warning('Page missing ID, skipping: %s', page)
+                    logger.warning(f'Page missing ID, skipping: {page}')
                     continue
                 
                 # Execute upsert statement
@@ -63,7 +64,7 @@ def upsert_pages(pages: Iterable[Dict[str, Any]]) -> int:
                     {
                         'id': page_id,
                         'source_updated_at': source_updated_at,
-                        'payload': page
+                        'payload': Jsonb(page)
                     }
                 )
                 row_count += 1
@@ -95,19 +96,13 @@ def main() -> int:
     try:
         logger.info(f'Fetching pages from Notion database {notion_database_id}')
         pages = notion_client.iter_database_pages(notion_database_id)
-        logger.info(
-            'Fetched pages from Notion API.',
-            extra={
-                'pages': len(pages),
-            }
-        )
         
         logger.info('Upserting pages into Postgres database')
         rows_upserted = upsert_pages(pages)
         logger.info(
-            'Upserted pages into Postgres database.',
+            'Fetched pages from Notion API and upserted into Postgres database.',
             extra={
-                'rows_upserted': rows_upserted,
+                'pages': rows_upserted
             }
         )
         return 0
@@ -118,4 +113,7 @@ def main() -> int:
         # Close Notion client session
         notion_client.close()
         logger.info('Finished Notion Sync Job')
+        
+if __name__ == "__main__":
+    raise SystemExit(main())
     
