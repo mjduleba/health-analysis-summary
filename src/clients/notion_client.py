@@ -57,10 +57,8 @@ class NotionClient:
             }
         )
         logger.debug(
-            "Initialized NotionClient with notion_version=%s timeout=%ss max_retries=%s",
-            self._config.notion_version,
-            self._config.timeout,
-            self._config.max_retries,
+            f"Initialized NotionClient with notion_version={self._config.notion_version} "
+            f"timeout={self._config.timeout}s max_retries={self._config.max_retries}"
         )
     
     def query_database(
@@ -109,12 +107,9 @@ class NotionClient:
             payload["start_cursor"] = start_cursor
 
         logger.debug(
-            "Querying database_id=%s page_size=%s has_filter=%s sorts_count=%s start_cursor_present=%s",
-            database_id,
-            page_size,
-            bool(filter_obj),
-            len(sorts) if sorts else 0,
-            bool(start_cursor),
+            f"Querying database_id={database_id} page_size={page_size} "
+            f"has_filter={bool(filter_obj)} sorts_count={len(sorts) if sorts else 0} "
+            f"start_cursor_present={bool(start_cursor)}"
         )
         return self._request("POST", url, json=payload)
 
@@ -132,10 +127,8 @@ class NotionClient:
         cursor: Optional[str] = None
         pages_fetched = 0
         logger.debug(
-            "Starting database iteration database_id=%s page_size=%s max_pages=%s",
-            database_id,
-            page_size,
-            max_pages,
+            f"Starting database iteration database_id={database_id} "
+            f"page_size={page_size} max_pages={max_pages}"
         )
 
         while True:
@@ -151,10 +144,8 @@ class NotionClient:
             # Extract results and yield each page
             results = response.get("results", [])
             logger.debug(
-                "Fetched page_index=%s rows=%s has_more=%s",
-                pages_fetched + 1,
-                len(results),
-                bool(response.get("has_more")),
+                f"Fetched page_index={pages_fetched + 1} "
+                f"rows={len(results)} has_more={bool(response.get('has_more'))}"
             )
             for page in results:
                 yield page
@@ -162,17 +153,17 @@ class NotionClient:
             # Update page counter and check max pages limit
             pages_fetched += 1
             if max_pages is not None and pages_fetched >= max_pages:
-                logger.debug("Stopping iteration: reached max_pages=%s", max_pages)
+                logger.debug(f"Stopping iteration: reached max_pages={max_pages}")
                 return
 
             # Check for more pages, exit if no more
             if not response.get("has_more"):
-                logger.debug("Stopping iteration: no more pages after page_index=%s", pages_fetched)
+                logger.debug(f"Stopping iteration: no more pages after page_index={pages_fetched}")
                 return
 
             # Update cursor for next page
             cursor = response.get("next_cursor")
-            logger.debug("Continuing iteration with next_cursor_present=%s", bool(cursor))
+            logger.debug(f"Continuing iteration with next_cursor_present={bool(cursor)}")
 
     def close(self) -> None:
         '''
@@ -208,11 +199,8 @@ class NotionClient:
         for attempt in range(self._config.max_retries + 1):
             attempt_number = attempt + 1
             logger.debug(
-                "HTTP request attempt=%s/%s method=%s url=%s",
-                attempt_number,
-                self._config.max_retries + 1,
-                method,
-                url,
+                f"HTTP request attempt={attempt_number}/{self._config.max_retries + 1} "
+                f"method={method} url={url}"
             )
             try:
                 # Make HTTP request
@@ -226,10 +214,7 @@ class NotionClient:
                 # Store last error and initiate backoff
                 last_error = f"Request failed: {exc}"
                 logger.warning(
-                    "Request exception on attempt=%s/%s: %s",
-                    attempt_number,
-                    self._config.max_retries + 1,
-                    exc,
+                    f"Request exception on attempt={attempt_number}/{self._config.max_retries + 1}: {exc}"
                 )
                 self._sleep_backoff(attempt)
                 continue
@@ -237,10 +222,8 @@ class NotionClient:
             # Handle successful response
             if 200 <= response.status_code < 300:
                 logger.debug(
-                    "HTTP request succeeded status=%s attempt=%s/%s",
-                    response.status_code,
-                    attempt_number,
-                    self._config.max_retries + 1,
+                    f"HTTP request succeeded status={response.status_code} "
+                    f"attempt={attempt_number}/{self._config.max_retries + 1}"
                 )
                 return response.json()
 
@@ -249,17 +232,15 @@ class NotionClient:
                 # Store formatted last error
                 last_error = self._format_error(response)
                 logger.warning(
-                    "Retryable response status=%s attempt=%s/%s",
-                    response.status_code,
-                    attempt_number,
-                    self._config.max_retries + 1,
+                    f"Retryable response status={response.status_code} "
+                    f"attempt={attempt_number}/{self._config.max_retries + 1}"
                 )
                 
                 # Check for Retry-After header and sleep accordingly
                 retry_after = response.headers.get("Retry-After")
                 if retry_after:
                     try:
-                        logger.debug("Sleeping for Retry-After=%s seconds", retry_after)
+                        logger.debug(f"Sleeping for Retry-After={retry_after} seconds")
                         time.sleep(float(retry_after))
                     except ValueError:
                         self._sleep_backoff(attempt)
@@ -269,10 +250,10 @@ class NotionClient:
                 continue
 
             error = self._format_error(response)
-            logger.error("Non-retryable response: %s", error)
+            logger.error(f"Non-retryable response: {error}")
             raise NotionAPIError(error)
 
-        logger.error("Request retries exhausted: %s", last_error or "Request failed after retries.")
+        logger.error(f"Request retries exhausted: {last_error or 'Request failed after retries.'}")
         raise NotionAPIError(last_error or "Request failed after retries.")
 
     def _sleep_backoff(self, attempt: int) -> None:
@@ -286,7 +267,7 @@ class NotionClient:
             getattr(self._config, "backoff_max_s", self._config.backoff_max),
             getattr(self._config, "backoff_base_s", self._config.backoff_base) * (2 ** attempt),
         )
-        logger.debug("Applying exponential backoff delay=%ss attempt=%s", delay, attempt + 1)
+        logger.debug(f"Applying exponential backoff delay={delay}s attempt={attempt + 1}")
         time.sleep(delay)
 
     @staticmethod
