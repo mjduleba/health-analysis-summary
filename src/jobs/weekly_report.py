@@ -91,7 +91,9 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     
     # Flatten DataFrame to extract each property into its own column
+    logger.info('Flattening DataFrame to extract properties from payload...')
     flattened_df = flatten_df(df)
+    logger.info('DataFrame flattened successfully.')
     
     # Convert date column to datetime format
     flattened_df['date'] = pd.to_datetime(flattened_df['date'])
@@ -100,21 +102,35 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     # Refine to last 7 days
     # TODO: Swap days parameter, not enough recent data to test
     last_week_date = pd.Timestamp.now() - pd.Timedelta(days=21)
-    refined_df = flattened_df[flattened_df["date"] >= last_week_date]
+    refined_df = flattened_df[flattened_df['date'] >= last_week_date]
     
     logger.info('Postgres data cleaning complete.')
     logger.debug(f'Cleaned DataFrame: {refined_df}')
     
     return refined_df
-    
-    
-# Main method for testing
-if __name__ == "__main__":
+
+
+def main() -> int:
+    """
+
+    Returns:
+        int: Exit code.
+    """
+    # Load env variables to memory
     load_dotenv()
     
-    # Fetch data from Postgres
-    raw_data = fetch_data()
+    logger.info("Starting weekly report job")
+
+    try:
+        raw_df = fetch_data()
+        cleaned_df = clean_data(raw_df)
+
+        logger.info("Weekly report dataset prepared with %s rows", len(cleaned_df))
+        logger.debug("Cleaned weekly dataset:\n%s", cleaned_df)
+
+        return 0
+
+    except Exception:
+        logger.exception("Weekly report job failed")
+        return 1
     
-    # Clean the fetched data
-    cleaned_data = clean_data(raw_data)
-        
