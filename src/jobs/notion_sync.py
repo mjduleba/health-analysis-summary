@@ -45,9 +45,15 @@ def upsert_pages(pages: Iterable[Dict[str, Any]]) -> int:
     # Store the number of rows upserted
     row_count = 0
     
+    logger.debug('Opening Postgres transaction for Notion upsert')
+
     # Create connection and cursor
     with get_conn() as conn:
         with conn.cursor() as cur:
+            cur.execute('SELECT COUNT(*) FROM raw.notion_entries')
+            rows_before = cur.fetchone()[0]
+            logger.debug('raw.notion_entries row count before upsert: %s', rows_before)
+
             # Iterate through pages and yield each page
             for page in pages:
                 # Store fields from page
@@ -67,7 +73,26 @@ def upsert_pages(pages: Iterable[Dict[str, Any]]) -> int:
                         'payload': Jsonb(page)
                     }
                 )
+                logger.debug(
+                    'Upserted notion page id=%s source_updated_at=%s cursor_rowcount=%s',
+                    page_id,
+                    source_updated_at,
+                    cur.rowcount,
+                )
                 row_count += 1
+
+            cur.execute('SELECT COUNT(*) FROM raw.notion_entries')
+            rows_after = cur.fetchone()[0]
+            logger.debug(
+                'raw.notion_entries row count after upsert (before commit): %s',
+                rows_after,
+            )
+            logger.info(
+                'Notion upsert summary attempted=%s rows_before=%s rows_after=%s',
+                row_count,
+                rows_before,
+                rows_after,
+            )
     return row_count
     
 def main() -> int:
@@ -99,12 +124,7 @@ def main() -> int:
         
         logger.info('Upserting pages into Postgres database')
         rows_upserted = upsert_pages(pages)
-        logger.info(
-            'Fetched pages from Notion API and upserted into Postgres database.',
-            extra={
-                'pages': rows_upserted
-            }
-        )
+        logger.info('Fetched pages from Notion API and attempted upserts=%s', rows_upserted)
         return 0
     except Exception as e:
         logger.error(f'Notion Sync Job failed. Error: {str(e)}')
