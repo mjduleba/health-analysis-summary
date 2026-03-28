@@ -1,4 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS raw;
+CREATE SCHEMA IF NOT EXISTS app;
 
 CREATE TABLE IF NOT EXISTS raw.notion_entries (
     id TEXT PRIMARY KEY,
@@ -49,4 +50,12 @@ CREATE TABLE IF NOT EXISTS raw.whoop_workouts (
 
 CREATE INDEX IF NOT EXISTS ix_raw_whoop_workouts_source_updated_at
   ON raw.whoop_workouts (source_updated_at);
+
+CREATE TABLE IF NOT EXISTS app.oauth_tokens (
+    provider TEXT PRIMARY KEY,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
   
