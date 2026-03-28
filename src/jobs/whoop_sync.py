@@ -10,6 +10,10 @@ from psycopg.types.json import Jsonb
 from src.clients.whoop_client import WhoopClient, WhoopClientConfig
 from src.shared.db import get_conn
 from src.shared.logger import get_logger
+from src.shared.whoop_tokens import (
+    load_whoop_tokens,
+    save_whoop_tokens_from_response,
+)
 
 # Initialize global logger
 logger = get_logger(__name__)
@@ -37,6 +41,40 @@ WHOOP_COLLECTIONS = (
         'id_field': 'id',
     },
 )
+
+
+def resolve_whoop_tokens() -> dict[str, str | None]:
+    '''
+    Resolve WHOOP OAuth tokens, preferring Postgres-backed persisted tokens.
+    '''
+    stored_tokens = load_whoop_tokens()
+    if stored_tokens:
+        logger.info(
+            'Loaded WHOOP OAuth tokens from Postgres updated_at=%s expires_at=%s',
+            stored_tokens.get('updated_at'),
+            stored_tokens.get('expires_at'),
+        )
+        return {
+            'access_token': stored_tokens.get('access_token'),
+            'refresh_token': stored_tokens.get('refresh_token'),
+        }
+
+    access_token = os.environ.get('WHOOP_ACCESS_TOKEN')
+    refresh_token = os.environ.get('WHOOP_REFRESH_TOKEN')
+
+    if access_token and refresh_token:
+        logger.info('Seeding WHOOP OAuth tokens from environment into Postgres')
+        save_whoop_tokens_from_response(
+            {
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+            }
+        )
+
+    return {
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+    }
 
 
 def get_sync_window() -> tuple[str, str]:
@@ -249,14 +287,17 @@ def main() -> int:
 
     logger.info('Starting WHOOP Sync Job')
 
+    whoop_tokens = resolve_whoop_tokens()
+
     # Create WhoopClient using WhoopClientConfig
     client = WhoopClient(
         WhoopClientConfig(
             client_id=os.environ['WHOOP_CLIENT_ID'],
             client_secret=os.environ['WHOOP_CLIENT_SECRET'],
             redirect_uri=os.environ['WHOOP_REDIRECT_URI'],
-            access_token=os.environ.get('WHOOP_ACCESS_TOKEN'),
-            refresh_token=os.environ.get('WHOOP_REFRESH_TOKEN'),
+            access_token=whoop_tokens.get('access_token'),
+            refresh_token=whoop_tokens.get('refresh_token'),
+            token_update_callback=save_whoop_tokens_from_response,
         )
     )
 
