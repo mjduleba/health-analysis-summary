@@ -340,7 +340,8 @@ class WhoopClient:
         return self._request_with_retries(
             'GET', 
             url, 
-            params=params
+            params=params,
+            auth_required=True,
         )
     
     def _request_with_retries(
