@@ -1,7 +1,7 @@
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import urlencode
 
 import requests
@@ -45,6 +45,7 @@ class WhoopClientConfig:
     max_retries: int = 5
     backoff_base_s: float = 1.0
     backoff_max_s: float = 20.0
+    token_update_callback: Optional[Callable[[Dict[str, Any]], None]] = None
     
 
 class WhoopClient:
@@ -112,10 +113,7 @@ class WhoopClient:
         # Send request and store response
         response = self._request_with_retries('POST', url, data=data, auth_required=False)
         
-        # Extract access and refresh tokens
-        self._access_token = response.get('access_token')
-        self._refresh_token = response.get('refresh_token')
-        
+        self._store_token_response(response)
         return response
     
     def refresh_access_token(self) -> Dict[str, Any]:
@@ -146,10 +144,7 @@ class WhoopClient:
         # Make request to refresh access token
         response = self._request_with_retries('POST', url, data=data, auth_required=False)
         
-        # Store access and refresh token
-        self._access_token = response.get('access_token')
-        self._refresh_token = response.get('refresh_token')
-        
+        self._store_token_response(response)
         logger.info('Whoop access token refreshed successfully')
         
         return response
@@ -296,6 +291,21 @@ class WhoopClient:
     def close(self) -> None:
         '''Close the underlying HTTP session.'''
         self._session.close()
+
+    def _store_token_response(self, response: Dict[str, Any]) -> None:
+        '''
+        Store access and refresh tokens returned by WHOOP and persist them if configured.
+        '''
+        access_token = response.get('access_token')
+        refresh_token = response.get('refresh_token')
+
+        if access_token:
+            self._access_token = access_token
+        if refresh_token:
+            self._refresh_token = refresh_token
+
+        if self._config.token_update_callback:
+            self._config.token_update_callback(response)
         
     def _get_collection_page(
         self,
@@ -340,7 +350,8 @@ class WhoopClient:
         return self._request_with_retries(
             'GET', 
             url, 
-            params=params
+            params=params,
+            auth_required=True,
         )
     
     def _request_with_retries(

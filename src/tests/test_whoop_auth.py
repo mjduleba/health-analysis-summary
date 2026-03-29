@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from src.clients.whoop_client import WhoopClient, WhoopClientConfig
 from src.shared.logger import get_logger
+from src.shared.whoop_tokens import save_whoop_tokens_from_response
 
 
 logger = get_logger(__name__)
@@ -49,6 +50,7 @@ def main() -> int:
             client_id=client_id,
             client_secret=client_secret,
             redirect_uri=redirect_uri,
+            token_update_callback=save_whoop_tokens_from_response,
         )
     )
 
@@ -100,6 +102,7 @@ def main() -> int:
         print("\nAdd these to your .env:\n")
         print(f"WHOOP_ACCESS_TOKEN={access_token}")
         print(f"WHOOP_REFRESH_TOKEN={refresh_token}")
+        print("\nTokens were also persisted to Postgres in app.oauth_tokens.\n")
 
         return 0
 
